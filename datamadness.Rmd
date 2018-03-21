@@ -1,0 +1,90 @@
+---
+title: "Data Madness"
+output: html_notebook
+---
+
+
+Context:
+Typically e-commerce datasets are proprietary and consequently hard to find among publicly available data. However, The UCI Machine Learning Repository has made this dataset containing actual transactions from 2010 and 2011. The dataset is maintained on their site, where it can be found by the title "Online Retail".
+
+Content:
+"This is a transnational data set which contains all the transactions occurring between 01/12/2010 and 09/12/2011 for a UK-based and registered non-store online retail.The company mainly sells unique all-occasion gifts. Many customers of the company are wholesalers."
+
+Acknowledgements:
+Per the UCI Machine Learning Repository, this data was made available by Dr Daqing Chen, Director: Public Analytics group. chend '@' lsbu.ac.uk, School of Engineering, London South Bank University, London SE1 0AA, UK.
+
+Inspiration:
+Analyses for this dataset could include time series, clustering, classification and more.
+
+```{r include=FALSE}
+#Loading Libraries
+library(data.table)
+library(lubridate)
+library(ggplot2) # Data visualization
+library(dplyr)
+library(DataExplorer)
+library(forecast)
+library(TSA)
+```
+```{r}
+#Loading E-commerce data
+df_data <- fread('data.csv')
+head(df_data)
+```
+```{r}
+plot_missing(df_data)
+```
+```{r}
+df_data <- na.omit(df_data)
+dim(df_data)
+```
+```{r}
+df_data$date <- sapply(df_data$InvoiceDate, FUN = function(x) { strsplit(x, split="[ ]")[[1]][1]})
+df_data$time <- sapply(df_data$InvoiceDate, FUN = function(x) { strsplit(x, split="[ ]")[[1]][2]})
+
+df_data$date <- as.Date(df_data$date, "%m/%d/%Y")
+df_data$dayOfWeek <- wday(df_data$date, label=TRUE)
+
+df_data <- df_data %>% mutate(totalPrice = UnitPrice * Quantity)
+
+head(df_data)
+```
+```{r}
+
+revenueByDate <- df_data %>% 
+    group_by(date) %>%
+    summarise(revenue = sum(totalPrice))
+
+ts_data <- ts(revenueByDate$revenue, start = c(2010,12), frequency = 305)
+revenueByDate$clean_ts <- tsclean(ts_data)
+
+revenueByDate$cnt_ma = ma(revenueByDate$clean_ts, order=7)
+revenueByDate$cnt_ma30 = ma(revenueByDate$clean_ts, order=30)
+
+options(repr.plot.width=8, repr.plot.height=8)
+
+ggplot() + 
+  geom_line(data=revenueByDate, aes(x = date, y = clean_ts, color = "Volume")) +
+  geom_line(data=revenueByDate, aes(x = date, y = cnt_ma, colour = "Weekly Moving Average")) +
+  geom_line(data=revenueByDate, aes(x = date, y = cnt_ma30, colour = "Monthly Moving Average")) + 
+  ylab('Revenue')
+
+
+df_data %>% 
+  group_by(dayOfWeek) %>%
+  summarise(revenue = sum(totalPrice)) %>%
+  ggplot(aes(x=dayOfWeek, y=revenue)) + geom_col()
+
+```
+```{r}
+adf.test(revenueByDate$clean_ts, alternative = "stationary")
+
+fit <- auto.arima(revenueByDate$clean_ts, seasonal = FALSE)
+fit
+tsdisplay(residuals(fit), lag.max=45, main='ARIMA(5,1,0) ')
+```
+```{r}
+fcast <- forecast(fit, h=30)
+plot(fcast)
+```
+
