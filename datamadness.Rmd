@@ -57,34 +57,113 @@ revenueByDate <- df_data %>%
 
 ts_data <- ts(revenueByDate$revenue, start = c(2010,12), frequency = 305)
 revenueByDate$clean_ts <- tsclean(ts_data)
-
-revenueByDate$cnt_ma = ma(revenueByDate$clean_ts, order=7)
-revenueByDate$cnt_ma30 = ma(revenueByDate$clean_ts, order=30)
-
-options(repr.plot.width=8, repr.plot.height=8)
-
 ggplot() + 
-  geom_line(data=revenueByDate, aes(x = date, y = clean_ts, color = "Volume")) +
-  geom_line(data=revenueByDate, aes(x = date, y = cnt_ma, colour = "Weekly Moving Average")) +
-  geom_line(data=revenueByDate, aes(x = date, y = cnt_ma30, colour = "Monthly Moving Average")) + 
-  ylab('Revenue')
+  geom_line(data=revenueByDate, aes(x = date, y = clean_ts, color = "Volume")) + labs(x='Date', y='Revenue (£)', title='TS Revenue by Date')
 
+df_data %>%
+  group_by(date) %>%
+  summarise(revenue = sum(totalPrice)) %>%
+  ggplot(aes(x = date, y = revenue)) + geom_line() + geom_smooth(method="auto", se=TRUE) + labs(x='Date', y='Revenue (£)', title='Revenue by Date')
 
 df_data %>% 
   group_by(dayOfWeek) %>%
   summarise(revenue = sum(totalPrice)) %>%
-  ggplot(aes(x=dayOfWeek, y=revenue)) + geom_col()
+  ggplot(aes(x=dayOfWeek, y=revenue)) + geom_col() +
+  labs(x='Day of Week', y='Revenue (£))',title='Revenue by day of the week')
+```
+```{r}
+weekday_df <- df_data %>%
+  group_by(date, dayOfWeek) %>%
+  summarise(revenue = sum(totalPrice), transactions=n_distinct(InvoiceNo)) %>%
+  mutate(aveRevenue = (round((revenue / transactions),2))) %>%
+  ungroup()
 
+
+head(weekday_df)
+
+```
+```{r}
+ggplot(weekday_df, aes(x=dayOfWeek, y=revenue)) + geom_boxplot() +labs(x='Day of the week', y='Revenue (£)', title='Revenue by day of the week')
+ggplot(weekday_df, aes(x=dayOfWeek, y=transactions)) + geom_boxplot() +labs(x='Day of the week', y='Transaction', title='Number of transactions by day of the week')
+ggplot(weekday_df, aes(x=dayOfWeek, y=aveRevenue)) + geom_boxplot() +labs(x='Day of the week', y='Avg. Revenue', title='Avg revenue by day of the week')
+
+```
+#Country summary
+```{r}
+country_df <- df_data %>%
+  group_by(Country) %>%
+  summarise(revenue=sum(totalPrice), transactions=n_distinct(InvoiceNo)) %>%
+  mutate(avgOrderVal = round((revenue / transactions),2)) %>%
+  arrange(desc(revenue))
+
+head(country_df)
+```
+```{r}
+topFiveCountries <- df_data %>%
+filter(Country == 'Netherlands' | Country == 'EIRE' | Country == 'Germany' | Country == 'France' | Country == 'Australia')
+
+topFiveCountries_df <- topFiveCountries %>%
+  group_by(Country, date) %>%
+  summarise(revenue = sum(totalPrice), transactions= n_distinct(InvoiceNo), customers = n_distinct(CustomerID)) %>%
+  mutate(avgOrdVal = (round((revenue/transactions), 2))) %>%
+  ungroup() %>%
+  arrange(desc(revenue))
+
+head(topFiveCountries_df)
+```
+```{r}
+ggplot(topFiveCountries_df, aes(x=Country, y=revenue)) + geom_col() + labs(x = 'Country', y='Revenue (£)', title='Revenue by Country')
+ggplot(topFiveCountries_df, aes(x=date, y=revenue, colour=Country))+geom_smooth(method='auto', se=FALSE) + labs(x='Date',y='Revenue (£)') 
+ggplot(topFiveCountries_df, aes(x=Country, y=avgOrdVal)) + geom_boxplot() + labs(x='Country', y='Average Order Value (£)') + scale_y_log10()
+ggplot(topFiveCountries_df, aes(x=Country, y=transactions)) + geom_boxplot() + labs(x='Country', y="Transactions", title = "Number of transactions by Country")
+```
+```{r}
+sales_by_stock <- df_data %>% 
+  group_by(StockCode) %>%
+  summarize(sales=sum(Quantity))
+
+
+sales_by_stock[order(-sales_by_stock$sales),]
+print ("The best selling item has stock code 84077. Description: ")
+df_data[df_data$StockCode==84077,]$Description[1]
+
+print ("The worst selling item has stock code 21700. Description: ")
+df_data[df_data$StockCode==21700,]$Description[1]
+
+```
+```{r}
+revenue_by_stock <- df_data %>% 
+  group_by(StockCode) %>%
+  summarize(revenue=sum(Quantity*UnitPrice))
+
+revenue_by_stock[order(-revenue_by_stock$revenue),]
+print ("The item which caused the highest revenue has stock code: 22423. Description:")
+df_data[df_data$StockCode=="22423",]$Description[1]
+print ("The item which caused the lowest revenue has stock code: 23359 Description:")
+df_data[df_data$StockCode=="23359",]$Description[1]
+
+```
+```{r}
+customer_spending <- df_data %>%
+  group_by(CustomerID) %>%
+  summarize(purchases = sum(Quantity*UnitPrice))
+
+customer_spending[order(-customer_spending$purchases),]
+print ("The customer spending the most has ID: 14646 and he purchased for £279489.02")
+print ("The customer spending the least has ID: 15594 and he purchased for £1767.530")
 ```
 ```{r}
 adf.test(revenueByDate$clean_ts, alternative = "stationary")
-
-fit <- auto.arima(revenueByDate$clean_ts, seasonal = FALSE)
+fit <- auto.arima(revenueByDate$clean_ts, seasonal = TRUE)
 fit
 tsdisplay(residuals(fit), lag.max=45, main='ARIMA(5,1,0) ')
-```
-```{r}
 fcast <- forecast(fit, h=30)
 plot(fcast)
+```
+```{r}
+x.spec <- spec.pgram(revenueByDate$clean_ts,log="no", taper=0)
+spx <- x.spec$freq*1 #to get the correct x axis (note that this is only approximation - see example below for accurate)
+plot(x.spec$spec~spx,xlab="period",ylab="spectral density",type="h")
+title("E-commerce periodogram")
 ```
 
