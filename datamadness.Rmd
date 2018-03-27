@@ -59,8 +59,6 @@ revenueByDate <- df_data %>%
 
 ts_data <- ts(revenueByDate$revenue, start = c(2010,12), frequency = 305)
 revenueByDate$clean_ts <- tsclean(ts_data)
-ggplot() + 
-  geom_line(data=revenueByDate, aes(x = date, y = clean_ts)) + labs(x='Date', y='Revenue (£)', title='TS Revenue by Date')
 
 df_data %>%
   group_by(date) %>%
