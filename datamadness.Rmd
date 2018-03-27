@@ -1,11 +1,13 @@
 ---
 title: "Data Madness"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
 
 Context:
-Typically e-commerce datasets are proprietary and consequently hard to find among publicly available data. However, The UCI Machine Learning Repository has made this dataset containing actual transactions from 2010 and 2011. The dataset is maintained on their site, where it can be found by the title "Online Retail".
+  Typically e-commerce datasets are proprietary and consequently hard to find among publicly available data. However, The UCI Machine Learning Repository has made this dataset containing actual transactions from 2010 and 2011. The dataset is maintained on their site, where it can be found by the title "Online Retail".
 
 Content:
 "This is a transnational data set which contains all the transactions occurring between 01/12/2010 and 09/12/2011 for a UK-based and registered non-store online retail.The company mainly sells unique all-occasion gifts. Many customers of the company are wholesalers."
@@ -26,6 +28,7 @@ library(DataExplorer)
 library(forecast)
 library(TSA)
 ```
+#EDA
 ```{r}
 #Loading E-commerce data
 df_data <- fread('data.csv')
@@ -50,7 +53,6 @@ df_data <- df_data %>% mutate(totalPrice = UnitPrice * Quantity)
 head(df_data)
 ```
 ```{r}
-
 revenueByDate <- df_data %>% 
     group_by(date) %>%
     summarise(revenue = sum(totalPrice))
@@ -58,19 +60,15 @@ revenueByDate <- df_data %>%
 ts_data <- ts(revenueByDate$revenue, start = c(2010,12), frequency = 305)
 revenueByDate$clean_ts <- tsclean(ts_data)
 ggplot() + 
-  geom_line(data=revenueByDate, aes(x = date, y = clean_ts, color = "Volume")) + labs(x='Date', y='Revenue (£)', title='TS Revenue by Date')
+  geom_line(data=revenueByDate, aes(x = date, y = clean_ts)) + labs(x='Date', y='Revenue (£)', title='TS Revenue by Date')
 
 df_data %>%
   group_by(date) %>%
   summarise(revenue = sum(totalPrice)) %>%
   ggplot(aes(x = date, y = revenue)) + geom_line() + geom_smooth(method="auto", se=TRUE) + labs(x='Date', y='Revenue (£)', title='Revenue by Date')
-
-df_data %>% 
-  group_by(dayOfWeek) %>%
-  summarise(revenue = sum(totalPrice)) %>%
-  ggplot(aes(x=dayOfWeek, y=revenue)) + geom_col() +
-  labs(x='Day of Week', y='Revenue (£))',title='Revenue by day of the week')
 ```
+
+#Day of the week analysis
 ```{r}
 weekday_df <- df_data %>%
   group_by(date, dayOfWeek) %>%
@@ -79,7 +77,7 @@ weekday_df <- df_data %>%
   ungroup()
 
 
-head(weekday_df)
+head(weekday_df, n=10)
 
 ```
 ```{r}
@@ -88,7 +86,6 @@ ggplot(weekday_df, aes(x=dayOfWeek, y=transactions)) + geom_boxplot() +labs(x='D
 ggplot(weekday_df, aes(x=dayOfWeek, y=aveRevenue)) + geom_boxplot() +labs(x='Day of the week', y='Avg. Revenue', title='Avg revenue by day of the week')
 
 ```
-#Country summary
 ```{r}
 country_df <- df_data %>%
   group_by(Country) %>%
@@ -114,14 +111,28 @@ head(topFiveCountries_df)
 ```{r}
 ggplot(topFiveCountries_df, aes(x=Country, y=revenue)) + geom_col() + labs(x = 'Country', y='Revenue (£)', title='Revenue by Country')
 ggplot(topFiveCountries_df, aes(x=date, y=revenue, colour=Country))+geom_smooth(method='auto', se=FALSE) + labs(x='Date',y='Revenue (£)') 
+ggplot(topFiveCountries_df, aes(x=date, y=transactions, colour=Country))+geom_smooth(method='auto', se=FALSE) + labs(x='Date',y='Transactions') 
 ggplot(topFiveCountries_df, aes(x=Country, y=avgOrdVal)) + geom_boxplot() + labs(x='Country', y='Average Order Value (£)') + scale_y_log10()
 ggplot(topFiveCountries_df, aes(x=Country, y=transactions)) + geom_boxplot() + labs(x='Country', y="Transactions", title = "Number of transactions by Country")
+
 ```
+
+```{r}
+customer_spending <- df_data %>%
+  group_by(CustomerID) %>%
+  summarise(purchases = sum(Quantity*UnitPrice), Country = Country[1])
+customer_spending <- customer_spending[!(customer_spending$Country=='United Kingdom'),]
+customer_spending[order(-customer_spending$purchases),]
+print ("The customer spending the most has ID: 14646 and he purchased for £279489.02")
+print ("The customer spending the least has ID: 15594 and he purchased for £1767.530")
+```
+
+#Items summary
+
 ```{r}
 sales_by_stock <- df_data %>% 
   group_by(StockCode) %>%
   summarize(sales=sum(Quantity))
-
 
 sales_by_stock[order(-sales_by_stock$sales),]
 print ("The best selling item has stock code 84077. Description: ")
@@ -143,15 +154,8 @@ print ("The item which caused the lowest revenue has stock code: 23359 Descripti
 df_data[df_data$StockCode=="23359",]$Description[1]
 
 ```
-```{r}
-customer_spending <- df_data %>%
-  group_by(CustomerID) %>%
-  summarize(purchases = sum(Quantity*UnitPrice))
 
-customer_spending[order(-customer_spending$purchases),]
-print ("The customer spending the most has ID: 14646 and he purchased for £279489.02")
-print ("The customer spending the least has ID: 15594 and he purchased for £1767.530")
-```
+#TimeSeries analysis
 ```{r}
 adf.test(revenueByDate$clean_ts, alternative = "stationary")
 fit <- auto.arima(revenueByDate$clean_ts, seasonal = TRUE)
@@ -166,4 +170,4 @@ spx <- x.spec$freq*1 #to get the correct x axis (note that this is only approxim
 plot(x.spec$spec~spx,xlab="period",ylab="spectral density",type="h")
 title("E-commerce periodogram")
 ```
-
+#Conclusions
