@@ -27,6 +27,7 @@ library(dplyr)
 library(DataExplorer)
 library(forecast)
 library(TSA)
+library(wordspace)
 ```
 #EDA
 ```{r}
@@ -107,7 +108,7 @@ topFiveCountries_df <- topFiveCountries %>%
 head(topFiveCountries_df)
 ```
 ```{r}
-ggplot(topFiveCountries_df, aes(x=Country, y=revenue)) + geom_col() + labs(x = 'Country', y='Revenue (£)', title='Revenue by Country')
+ggplot(topFiveCountries_df, aes(x=Country, y=revenue)) + geom_col(fill="red") + labs(x = 'Country', y='Revenue (£)', title='Revenue by Country')
 ggplot(topFiveCountries_df, aes(x=date, y=revenue, colour=Country))+geom_smooth(method='auto', se=FALSE) + labs(x='Date',y='Revenue (£)') 
 ggplot(topFiveCountries_df, aes(x=date, y=transactions, colour=Country))+geom_smooth(method='auto', se=FALSE) + labs(x='Date',y='Transactions') 
 ggplot(topFiveCountries_df, aes(x=Country, y=avgOrdVal)) + geom_boxplot() + labs(x='Country', y='Average Order Value (£)') + scale_y_log10()
@@ -118,11 +119,16 @@ ggplot(topFiveCountries_df, aes(x=Country, y=transactions)) + geom_boxplot() + l
 ```{r}
 customer_spending <- df_data %>%
   group_by(CustomerID) %>%
-  summarise(purchases = sum(Quantity*UnitPrice), Country = Country[1])
+  summarise(purchases = sum(Quantity*UnitPrice), transactions=n_distinct(InvoiceNo),Country = Country[1]) %>%
+  mutate(avgOrderVal = round((purchases / transactions),2)) 
+
 customer_spending <- customer_spending[!(customer_spending$Country=='United Kingdom'),]
-customer_spending[order(-customer_spending$purchases),]
+customer_spending <- customer_spending[order(-customer_spending$purchases),]
 print ("The customer spending the most has ID: 14646 and he purchased for £279489.02")
 print ("The customer spending the least has ID: 15594 and he purchased for £1767.530")
+top_customer_country <- customer_spending %>%
+  filter(Country == 'Netherlands' | Country == 'EIRE' | Country == 'Germany' | Country == 'France' | Country == 'Australia')
+ggplot(top_customer_country, aes(x=CustomerID, y=avgOrderVal, colour=Country)) + geom_point()
 ```
 
 #Items summary
@@ -130,14 +136,21 @@ print ("The customer spending the least has ID: 15594 and he purchased for £1767
 ```{r}
 sales_by_stock <- df_data %>% 
   group_by(StockCode) %>%
-  summarize(sales=sum(Quantity))
-
+  summarise(sales=sum(Quantity), UnitPrice = UnitPrice[1]) %>%
+  mutate(totalRevenue = sales*UnitPrice)
+  
 sales_by_stock[order(-sales_by_stock$sales),]
 print ("The best selling item has stock code 84077. Description: ")
-df_data[df_data$StockCode==84077,]$Description[1]
+df_data[df_data$StockCode=="84077",]$Description[1]
+
+print ("The best selling item has stock code 22197 Description: ")
+df_data[df_data$StockCode=="22197",]$Description[1]
+
+print ("The best selling item has stock code 85099B Description: ")
+df_data[df_data$StockCode=="85099B",]$Description[1]
 
 print ("The worst selling item has stock code 21700. Description: ")
-df_data[df_data$StockCode==21700,]$Description[1]
+df_data[df_data$StockCode=="21700",]$Description[1]
 
 ```
 ```{r}
@@ -168,4 +181,3 @@ spx <- x.spec$freq*1 #to get the correct x axis (note that this is only approxim
 plot(x.spec$spec~spx,xlab="period",ylab="spectral density",type="h")
 title("E-commerce periodogram")
 ```
-#Conclusions
